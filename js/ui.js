@@ -1,6 +1,7 @@
 // DOM layer. main.js hands us an `app` facade; we render panels and forward events.
 
 import { OBJECT_TYPES, ADD_PRESETS, compass8 } from './objects.js';
+import { PANEL_TYPES } from './panels.js';
 import { renderMonthlyChart } from './charts.js';
 import { rampCSS } from './heatmap.js';
 
@@ -8,8 +9,7 @@ let app;
 const $ = (id) => document.getElementById(id);
 
 const SETTINGS_SCHEMA = [
-  { key: 'packingFactor', label: 'Roof area usable for panels', min: 0.2, max: 1, step: 0.05, hint: 'fraction of a face you can actually cover' },
-  { key: 'kwpPerM2', label: 'Panel power (kWp per m²)', min: 0.1, max: 0.3, step: 0.005 },
+  { key: 'packingFactor', label: 'Roof area usable for panels', min: 0.2, max: 1, step: 0.05, hint: 'fraction of a face where panels can actually go — caps how many fit' },
   { key: 'performanceRatio', label: 'System performance ratio', min: 0.5, max: 0.95, step: 0.01, hint: 'inverter, wiring, temperature, soiling losses' },
   { key: 'albedo', label: 'Ground albedo', min: 0.05, max: 0.8, step: 0.05 },
 ];
@@ -302,13 +302,25 @@ export function refreshResults(results, selectedFaceId, dayLabel) {
   const f = results.find((r) => r.id === selectedFaceId) || results[0];
   const sumYield = results.reduce((s, r) => s + r.yieldKWh, 0);
   const sumKwp = results.reduce((s, r) => s + r.kwp, 0);
+  const sumPanels = results.reduce((s, r) => s + r.panelCount, 0);
+  const pt = PANEL_TYPES[f.panelType];
+  const typeOptions = Object.entries(PANEL_TYPES)
+    .map(([k, p]) => `<option value="${k}"${k === f.panelType ? ' selected' : ''}>${p.label}</option>`)
+    .join('');
   total.innerHTML =
     `<div class="big">${fmtI(f.annualPOA)} kWh/m²·yr</div>` +
     `<div>${esc(shortLabel(f.label))} — ${f.area.toFixed(1)} m², tilt ${f.tilt.toFixed(0)}°, facing ${compass8(f.az)} (${f.az.toFixed(0)}°)</div>` +
     `<div class="note">unshaded ${fmtI(f.unshadedPOA)} kWh/m²·yr · shading −${f.shadingLossPct.toFixed(1)}% · ` +
     `${(f.sunHoursYr / 365).toFixed(1)} h direct sun/day (yr avg)${f.sunHoursDay != null ? ` · ${f.sunHoursDay.toFixed(1)} h on ${dayLabel}` : ''}</div>` +
-    `<div class="note">≈ ${f.kwp.toFixed(1)} kWp on ${f.usableArea.toFixed(1)} m² → <b>${fmtI(f.yieldKWh)} kWh/yr</b> (${fmtI(f.specificYield)} kWh/kWp)</div>` +
-    `<div class="note" style="border-top:1px solid var(--grid);margin-top:6px;padding-top:6px">All ${results.length} analyzed surfaces together: ≈ ${sumKwp.toFixed(1)} kWp → ${fmtI(sumYield)} kWh/yr</div>`;
+    `<div class="param-row"><label>Panel type</label><select id="pv-type">${typeOptions}</select></div>` +
+    `<div class="param-row"><label>Panels (max ${f.maxPanels} fit)</label><input id="pv-count" type="number" min="0" max="${f.maxPanels}" step="1" value="${f.panelCount}"></div>` +
+    `<div class="note">${f.panelCount} × ${pt.watts} W = <b>${f.kwp.toFixed(2)} kWp</b> covering ${f.usableArea.toFixed(1)} of ${f.area.toFixed(1)} m² → <b>${fmtI(f.yieldKWh)} kWh/yr</b> (${fmtI(f.specificYield)} kWh/kWp)</div>` +
+    `<div class="note" style="border-top:1px solid var(--grid);margin-top:6px;padding-top:6px">All ${results.length} analyzed surfaces together: ${sumPanels} panels ≈ ${sumKwp.toFixed(1)} kWp → ${fmtI(sumYield)} kWh/yr</div>`;
+  total.querySelector('#pv-type').addEventListener('change', (e) => app.setPanelConfig(f.id, { type: e.target.value }));
+  total.querySelector('#pv-count').addEventListener('change', (e) => {
+    const v = parseInt(e.target.value, 10);
+    app.setPanelConfig(f.id, { count: isNaN(v) ? undefined : v });
+  });
 
   chartPanel.hidden = false;
   $('chart-title').textContent = `Monthly insolation — ${shortLabel(f.label)}`;

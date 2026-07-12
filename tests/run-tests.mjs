@@ -5,6 +5,7 @@ import { createDefaultScene, buildObject } from '../js/objects.js';
 import { runAnnualAnalysis, runDayAnalysis } from '../js/analysis.js';
 import { buildHeatmapOverlay } from '../js/heatmap.js';
 import { collectExportMeshes, exportOBJ, exportDAE } from '../js/exporters.js';
+import { applyPvSizing, PANEL_TYPES } from '../js/panels.js';
 
 const LAT = 48.7758, LON = 9.1829;
 let failures = 0;
@@ -109,7 +110,7 @@ const faces = [...built.values()].flatMap((b) => b.faces);
 // ---- 4. full annual analysis ----
 {
   const t0 = Date.now();
-  const settings = { packingFactor: 0.7, kwpPerM2: 0.215, performanceRatio: 0.8, albedo: 0.2 };
+  const settings = { packingFactor: 0.7, performanceRatio: 0.8, albedo: 0.2 };
   const results = await runAnnualAnalysis({
     faces, occluders: groups, climate: clim,
     location: { lat: LAT, lon: LON }, settings,
@@ -130,6 +131,17 @@ const faces = [...built.values()].flatMap((b) => b.faces);
   check('monthly arrays sum to annual', results.every((f) => Math.abs(f.monthlyPOA.reduce((a, b) => a + b, 0) - f.annualPOA) < 1));
   check('all points have annual values', results.every((f) => f.points.every((p) => isFinite(p.annual) && p.annual >= 0)));
   check('June > December on south roof', south.monthlyPOA[5] > south.monthlyPOA[11] * 2, `${south.monthlyPOA[5].toFixed(0)} vs ${south.monthlyPOA[11].toFixed(0)}`);
+
+  // panel-based sizing: south face 73.4 m² × 0.7 packing / 2.224 m² per 500W panel = 23
+  check('south roof auto-fits 23 × 500 W panels', south.panelCount === 23 && Math.abs(south.kwp - 11.5) < 0.01, `${south.panelCount} × → ${south.kwp} kWp`);
+  const gardenPanel = results.find((f) => f.kind === 'panel');
+  check('free panel face fits exactly 1 panel (no packing derate)', gardenPanel.panelCount === 1 && gardenPanel.kwp === 0.5, `${gardenPanel.panelCount}`);
+  // explicit config: 10 × 440 W on the south roof
+  applyPvSizing(results, { [south.id]: { type: 'anker440', count: 10 } }, settings);
+  check('custom config 10 × 440 W → 4.4 kWp', south.panelType === 'anker440' && south.panelCount === 10 && Math.abs(south.kwp - 4.4) < 0.001, `${south.kwp}`);
+  check('custom yield = kWp × POA × PR', Math.abs(south.yieldKWh - 4.4 * south.annualPOA * 0.8) < 1, south.yieldKWh.toFixed(0));
+  check('count clamped to what fits', (applyPvSizing(results, { [south.id]: { count: 999 } }, settings), south.panelCount === south.maxPanels), `${south.panelCount}/${south.maxPanels}`);
+  applyPvSizing(results, {}, settings); // back to auto for the checks below
 
   // day pass
   await runDayAnalysis({ results, occluders: groups, date: new Date(2026, 5, 21), location: { lat: LAT, lon: LON } });

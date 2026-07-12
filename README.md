@@ -93,9 +93,13 @@ POA and ≈ 950–1,100 kWh/kWp — this simulator lands in the same range (vali
 - **Trees**: canopies attenuate by a seasonal transmittance (default broadleaf
   0.15 summer / 0.55 winter; set both ≈ 0.1 for conifers). Visual shadows in the 3D
   view are always fully opaque — the analysis is what applies transmittance.
-- **PV estimate**: usable area = face area × packing factor (0.7 default; free panels
-  count fully) → kWp = usable × 0.215 kWp/m² → kWh/yr = kWp × POA × performance ratio
-  (0.8 default). All four knobs are in the "PV assumptions" panel.
+- **PV estimate**: panel-based, per surface. Pick a panel type and count for each
+  analyzed surface in the Results panel — Anker SOLIX 500 W bifacial (1961 × 1134 mm)
+  or 440 W (1762 × 1134 mm); the default is the maximum number that fits
+  (face area × packing factor ÷ panel area). kWh/yr = count × watts × POA ×
+  performance ratio (0.8 default). Changing panels recomputes instantly without
+  re-running the shading analysis. Packing factor, performance ratio and albedo are
+  in the "PV assumptions" panel.
 - **Simplifications**: isotropic diffuse (slightly conservative for steep south
   faces), no horizon/terrain beyond your modeled objects, no snow, monthly
   representative days. Treat results as planning-grade (±10%), and run PVGIS/PVWatts

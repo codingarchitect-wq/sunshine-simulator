@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { sunPosition, sunDirection } from './solar.js';
 import { climateAt, DAYS_IN_MONTH } from './climate.js';
+import { applyPvSizing } from './panels.js';
 
 const REF_YEAR = 2025;
 
@@ -103,7 +104,7 @@ function diffuseObstruction(pos, normal, occluders) {
 }
 
 // ---------- the annual run ----------
-export async function runAnnualAnalysis({ faces, occluders, climate, location, settings, onProgress = () => {} }) {
+export async function runAnnualAnalysis({ faces, occluders, climate, location, settings, panelConfig = {}, onProgress = () => {} }) {
   for (const o of occluders) o.updateMatrixWorld(true);
   const results = [];
   const stepMin = 30;
@@ -179,12 +180,8 @@ export async function runAnnualAnalysis({ faces, occluders, climate, location, s
 
     const annualPOA = monthly.reduce((a, b) => a + b, 0);
     const unshadedPOA = monthlyUnshaded.reduce((a, b) => a + b, 0);
-    const packing = face.kind === 'panel' ? 1 : settings.packingFactor;
-    const usableArea = face.area * packing;
-    const kwp = usableArea * settings.kwpPerM2;
-    const yieldKWh = kwp * annualPOA * settings.performanceRatio; // POA in kWh/m² ≡ full-sun hours
     results.push({
-      id: face.id, label: face.label, area: face.area, tilt: face.tilt, az: face.az,
+      id: face.id, label: face.label, kind: face.kind, area: face.area, tilt: face.tilt, az: face.az,
       normal: { x: n.x, y: n.y, z: n.z },
       u: { x: u.x, y: u.y, z: u.z }, v: { x: v.x, y: v.y, z: v.z },
       spacing,
@@ -198,10 +195,9 @@ export async function runAnnualAnalysis({ faces, occluders, climate, location, s
       annualPOA, unshadedPOA,
       shadingLossPct: unshadedPOA > 0 ? (1 - annualPOA / unshadedPOA) * 100 : 0,
       sunHoursYr: points.reduce((s, p) => s + p.sunMinYr, 0) / points.length / 60,
-      usableArea, kwp, yieldKWh,
-      specificYield: kwp > 0 ? yieldKWh / kwp : 0,
     });
   }
+  applyPvSizing(results, panelConfig, settings); // panel type/count → kwp & yield
   onProgress(1, 'done');
   return results;
 }

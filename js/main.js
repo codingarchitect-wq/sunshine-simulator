@@ -7,6 +7,7 @@ import { buildSyntheticClimatology, annualGHI } from './climate.js';
 import { fetchOpenMeteoClimatology, cacheClimatology, loadCachedClimatology } from './weather.js';
 import { createDefaultScene, buildObject, newObject, ensureIdCounterAbove, OBJECT_TYPES } from './objects.js';
 import { runAnnualAnalysis, runDayAnalysis } from './analysis.js';
+import { applyPvSizing } from './panels.js';
 import { buildHeatmapOverlay } from './heatmap.js';
 import { collectExportMeshes, exportOBJ, exportDAE, download } from './exporters.js';
 import * as ui from './ui.js';
@@ -17,8 +18,9 @@ const RAD = Math.PI / 180;
 // ---------- state ----------
 const state = {
   location: { lat: 48.7758, lon: 9.1829 }, // Stuttgart
-  settings: { packingFactor: 0.7, kwpPerM2: 0.215, performanceRatio: 0.8, albedo: 0.2 },
+  settings: { packingFactor: 0.7, performanceRatio: 0.8, albedo: 0.2 },
   objects: [],
+  panelConfig: {}, // faceId -> { type, count }; missing = auto (max panels that fit)
 };
 let climate = null;
 let results = null;
@@ -465,6 +467,7 @@ function saveLocal() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         location: state.location, settings: state.settings, objects: state.objects,
+        panelConfig: state.panelConfig,
       }));
     } catch { /* ignore quota */ }
   }, 600);
@@ -479,6 +482,7 @@ function loadLocal() {
     Object.assign(state.location, data.location || {});
     Object.assign(state.settings, data.settings || {});
     state.objects = data.objects;
+    state.panelConfig = data.panelConfig || {};
     ensureIdCounterAbove(state.objects);
     return true;
   } catch {
@@ -737,6 +741,7 @@ const app = {
       const res = await runAnnualAnalysis({
         faces, occluders, climate,
         location: state.location, settings: state.settings,
+        panelConfig: state.panelConfig,
         onProgress: (f, label) => ui.setProgress(true, f, label),
       });
       await runDayAnalysis({ results: res, occluders, date: currentDate(), location: state.location });
@@ -785,6 +790,16 @@ const app = {
     ui.refreshResults(results, selectedFaceId, dayLabel());
   },
 
+  // change panel type / count for one surface — pure resizing, no re-analysis needed
+  setPanelConfig(faceId, cfg) {
+    state.panelConfig[faceId] = { ...state.panelConfig[faceId], ...cfg };
+    if (results) {
+      applyPvSizing(results, state.panelConfig, state.settings);
+      ui.refreshResults(results, selectedFaceId, dayLabel());
+    }
+    saveLocal();
+  },
+
   exportOBJ() {
     const meshes = collectExportMeshes(objectsRoot.children);
     const { obj, mtl } = exportOBJ(meshes);
@@ -800,6 +815,7 @@ const app = {
   saveJSON() {
     download('sunshine-scene.json', JSON.stringify({
       version: 1, location: state.location, settings: state.settings, objects: state.objects,
+      panelConfig: state.panelConfig,
     }, null, 2), 'application/json');
   },
 
@@ -813,6 +829,7 @@ const app = {
         Object.assign(state.location, data.location || {});
         Object.assign(state.settings, data.settings || {});
         state.objects = data.objects;
+        state.panelConfig = data.panelConfig || {};
         ensureIdCounterAbove(state.objects);
         selectedIds = new Set();
         rebuildAll();
