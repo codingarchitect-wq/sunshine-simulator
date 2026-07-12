@@ -86,11 +86,14 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-const grid = new THREE.GridHelper(120, 60, 0x525b4e, 0x4b5448);
+const GRID_SIZE = 120, GRID_DIVS = 60;
+const GRID_CELL = GRID_SIZE / GRID_DIVS; // 2 m per square
+const grid = new THREE.GridHelper(GRID_SIZE, GRID_DIVS, 0x525b4e, 0x4b5448);
 grid.material.transparent = true;
 grid.material.opacity = 0.35;
 grid.position.y = 0.02;
 scene.add(grid);
+document.getElementById('grid-scale').textContent = `⊞ 1 square = ${GRID_CELL} m`;
 
 // compass letters
 function letterSprite(letter, color) {
@@ -111,6 +114,28 @@ for (const [letter, x, z, color] of [['N', 0, -46, '#e66767'], ['E', 46, 0, '#c3
   s.position.set(x, 2.2, z);
   scene.add(s);
 }
+
+// striped surveyor's scale bar on the ground (5 grid cells long), aligned with the grid
+function buildScaleBar() {
+  const g = new THREE.Group();
+  const n = 5;
+  for (let i = 0; i < n; i++) {
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(GRID_CELL, 0.08, 0.5),
+      new THREE.MeshBasicMaterial({ color: i % 2 ? 0xe8e6dd : 0x2b2b28 })
+    );
+    m.position.set((i + 0.5) * GRID_CELL, 0.05, 0);
+    g.add(m);
+  }
+  const label = measureLabelSprite(`${n * GRID_CELL} m`);
+  label.material.depthTest = true; // unlike measurements, don't draw through objects
+  label.scale.set(3.4, 1.05, 1);
+  label.position.set((n * GRID_CELL) / 2, 1, 0);
+  g.add(label);
+  g.position.set(8, 0, -24); // open ground NE of the demo plot, visible from the default view
+  return g;
+}
+scene.add(buildScaleBar());
 
 const objectsRoot = new THREE.Group();
 scene.add(objectsRoot);
