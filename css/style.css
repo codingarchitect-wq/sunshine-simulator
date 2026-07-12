@@ -168,6 +168,11 @@ input[type="checkbox"] { accent-color: var(--accent); width: auto; }
 #sun-readout b { color: var(--ink); }
 #hint { color: var(--ink-muted); background: rgba(13,13,13,0.6); padding: 4px 8px; border-radius: 6px; }
 
+#btn-home-view {
+  position: absolute; right: 10px; bottom: 10px;
+  background: rgba(26,26,25,0.85);
+}
+
 #grid-scale {
   position: absolute; left: 10px; bottom: 10px;
   background: rgba(26,26,25,0.85);

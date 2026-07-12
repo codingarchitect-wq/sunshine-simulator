@@ -54,6 +54,21 @@ canvas.addEventListener('pointerdown', onPointerDown);
 canvas.addEventListener('pointermove', onPointerMove);
 window.addEventListener('pointerup', onPointerUp);
 
+// smooth camera fly-to (canceled by any manual orbit/zoom)
+let camAnim = null;
+function flyTo(pos, target, ms = 650) {
+  // flush residual orbit-damping momentum so it can't fight the animation
+  controls.enableDamping = false;
+  controls.update();
+  controls.enableDamping = true;
+  camAnim = {
+    p0: camera.position.clone(), p1: pos,
+    t0: controls.target.clone(), t1: target,
+    start: performance.now(), ms,
+  };
+}
+canvas.addEventListener('wheel', () => { camAnim = null; }, { passive: true });
+
 const controls = new OrbitControls(camera, canvas);
 controls.target.set(0, 3, 0);
 controls.enableDamping = true;
@@ -492,6 +507,21 @@ const app = {
   getMeasurement: () => measurement,
   canUndo: () => undoStack.length > 0,
   canRedo: () => redoStack.length > 0,
+  getCameraState: () => ({ pos: camera.position.toArray(), target: controls.target.toArray() }),
+
+  // fly the camera to the canonical view: centered on the scene, from the south, north up
+  resetView() {
+    const box = new THREE.Box3().setFromObject(objectsRoot);
+    const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
+    const span = box.isEmpty()
+      ? 30
+      : Math.max(box.max.x - box.min.x, box.max.z - box.min.z, (box.max.y - box.min.y) * 2, 20);
+    const dist = span * 1.5 + 8;
+    flyTo(
+      new THREE.Vector3(center.x, dist * 0.62, center.z + dist),
+      new THREE.Vector3(center.x, 2, center.z)
+    );
+  },
 
   // keyboard nudges: move the selection in world axes / rotate it about its centroid.
   // Rapid presses (key repeat) coalesce into a single undo step.
@@ -840,6 +870,7 @@ function pickObject(e) {
 }
 
 function onPointerDown(e) {
+  camAnim = null; // manual interaction cancels a camera fly-to
   if (e.button !== 0) return;
   const hit = pickObject(e);
   if (!hit) {
@@ -948,6 +979,13 @@ function animate(t) {
     minutes = (minutes + 4) % 1440;
     updateSun();
     ui.setTimeUI(dateStr, minutes);
+  }
+  if (camAnim) {
+    const k = Math.min(1, (t - camAnim.start) / camAnim.ms);
+    const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2; // easeInOutQuad
+    camera.position.lerpVectors(camAnim.p0, camAnim.p1, e);
+    controls.target.lerpVectors(camAnim.t0, camAnim.t1, e);
+    if (k >= 1) camAnim = null;
   }
   controls.update();
   renderer.render(scene, camera);

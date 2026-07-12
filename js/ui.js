@@ -53,6 +53,7 @@ export function initUI(appFacade) {
   $('btn-duplicate').addEventListener('click', () => app.duplicateSelected());
   $('btn-undo').addEventListener('click', () => app.undo());
   $('btn-redo').addEventListener('click', () => app.redo());
+  $('btn-home-view').addEventListener('click', () => app.resetView());
   $('btn-reset').addEventListener('click', () => {
     if (confirm('Replace the current scene with the demo scene?')) app.resetScene();
   });
