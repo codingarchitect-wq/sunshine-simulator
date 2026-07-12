@@ -511,15 +511,23 @@ const app = {
 
   // fly the camera to the canonical view: centered on the scene, from the south, north up
   resetView() {
-    const box = new THREE.Box3().setFromObject(objectsRoot);
-    const center = box.isEmpty() ? new THREE.Vector3(0, 0, 0) : box.getCenter(new THREE.Vector3());
-    const span = box.isEmpty()
-      ? 30
-      : Math.max(box.max.x - box.min.x, box.max.z - box.min.z, (box.max.y - box.min.y) * 2, 20);
+    const { center, span } = sceneFrame();
     const dist = span * 1.5 + 8;
     flyTo(
       new THREE.Vector3(center.x, dist * 0.62, center.z + dist),
       new THREE.Vector3(center.x, 2, center.z)
+    );
+  },
+
+  // plan view: straight down onto the scene center, north up on screen
+  topView() {
+    const { center, span } = sceneFrame();
+    const dist = span * 1.3 + 12;
+    // tiny southward offset resolves the degenerate straight-down orientation
+    // so OrbitControls puts north at the top of the screen
+    flyTo(
+      new THREE.Vector3(center.x, dist, center.z + dist * 0.03),
+      new THREE.Vector3(center.x, 0, center.z)
     );
   },
 
@@ -824,6 +832,16 @@ const app = {
     reader.readAsText(file);
   },
 };
+
+// bounding box of everything built, for camera framing
+function sceneFrame() {
+  const box = new THREE.Box3().setFromObject(objectsRoot);
+  if (box.isEmpty()) return { center: new THREE.Vector3(0, 0, 0), span: 30 };
+  return {
+    center: box.getCenter(new THREE.Vector3()),
+    span: Math.max(box.max.x - box.min.x, box.max.z - box.min.z, (box.max.y - box.min.y) * 2, 20),
+  };
+}
 
 function dayLabel() {
   const d = currentDate();

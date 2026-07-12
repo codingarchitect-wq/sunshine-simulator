@@ -54,6 +54,7 @@ export function initUI(appFacade) {
   $('btn-undo').addEventListener('click', () => app.undo());
   $('btn-redo').addEventListener('click', () => app.redo());
   $('btn-home-view').addEventListener('click', () => app.resetView());
+  $('btn-top-view').addEventListener('click', () => app.topView());
   $('btn-reset').addEventListener('click', () => {
     if (confirm('Replace the current scene with the demo scene?')) app.resetScene();
   });
