@@ -96,9 +96,13 @@ POA and ≈ 950–1,100 kWh/kWp — this simulator lands in the same range (vali
 - **PV estimate**: panel-based, per surface. Pick a panel type and count for each
   analyzed surface in the Results panel — Anker SOLIX 500 W bifacial (1961 × 1134 mm)
   or 440 W (1762 × 1134 mm); the default is the maximum number that fits
-  (face area × packing factor ÷ panel area). kWh/yr = count × watts × POA ×
-  performance ratio (0.8 default). Changing panels recomputes instantly without
-  re-running the shading analysis. Packing factor, performance ratio and albedo are
+  (face area × packing factor ÷ panel area). Counts go in half-panel steps, and
+  balconies expose each railing side separately (front / left / right, each with its
+  own orientation and shading) — so "one panel on the left railing, half a panel on
+  the front" is directly expressible. Exceeding the flush fit is allowed for
+  overhanging mounts, with a warning. kWh/yr = count × watts × POA × performance
+  ratio (0.8 default). Changing panels recomputes instantly without re-running the
+  shading analysis. Packing factor, performance ratio and albedo are
   in the "PV assumptions" panel.
 - **Simplifications**: isotropic diffuse (slightly conservative for steep south
   faces), no horizon/terrain beyond your modeled objects, no snow, monthly

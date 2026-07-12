@@ -90,7 +90,9 @@ export const OBJECT_TYPES = {
       num('d', 'Depth (m)', 0.6, 5, 0.1, 1.6),
       num('floorHeight', 'Floor height (m)', 1, 25, 0.1, 3.1),
       num('railingHeight', 'Railing height (m)', 0.8, 1.4, 0.05, 1.0),
-      bool('analyzeRailing', 'Analyze railing (balcony PV)', true),
+      bool('analyzeFront', 'Panels on front railing', true),
+      bool('analyzeLeft', 'Panels on left railing (looking out)', false),
+      bool('analyzeRight', 'Panels on right railing (looking out)', false),
       ...POS,
     ],
   },
@@ -345,18 +347,26 @@ function buildBalconyLocal(p) {
   const slab = new TriBuilder();
   slab.box(0, p.floorHeight - 0.07, 0, p.w, 0.14, p.d);
   const rail = new TriBuilder();
-  const rTop = p.floorHeight + p.railingHeight;
-  rail.box(0, (p.floorHeight + rTop) / 2, hd - 0.03, p.w, p.railingHeight, 0.06);
-  rail.box(-hw + 0.03, (p.floorHeight + rTop) / 2, 0, 0.06, p.railingHeight, p.d - 0.12);
-  rail.box(hw - 0.03, (p.floorHeight + rTop) / 2, 0, 0.06, p.railingHeight, p.d - 0.12);
+  const fH = p.floorHeight, rTop = fH + p.railingHeight;
+  rail.box(0, (fH + rTop) / 2, hd - 0.03, p.w, p.railingHeight, 0.06);
+  rail.box(-hw + 0.03, (fH + rTop) / 2, 0, 0.06, p.railingHeight, p.d - 0.12);
+  rail.box(hw - 0.03, (fH + rTop) / 2, 0, 0.06, p.railingHeight, p.d - 0.12);
   const v = (x, y, z) => new THREE.Vector3(x, y, z);
-  const railPoly = [v(-hw, p.floorHeight, hd), v(hw, p.floorHeight, hd), v(hw, rTop, hd), v(-hw, rTop, hd)];
+  // sides named for someone standing on the balcony looking out (toward local +z):
+  // left = +x, right = -x. analyzeRailing is the pre-side-selection legacy flag.
+  const facePolys = [];
+  if (p.analyzeFront ?? p.analyzeRailing ?? true)
+    facePolys.push({ poly: [v(-hw, fH, hd), v(hw, fH, hd), v(hw, rTop, hd), v(-hw, rTop, hd)], suffix: 'railing front' });
+  if (p.analyzeLeft)
+    facePolys.push({ poly: [v(hw, fH, hd), v(hw, fH, -hd), v(hw, rTop, -hd), v(hw, rTop, hd)], suffix: 'railing left' });
+  if (p.analyzeRight)
+    facePolys.push({ poly: [v(-hw, fH, -hd), v(-hw, fH, hd), v(-hw, rTop, hd), v(-hw, rTop, -hd)], suffix: 'railing right' });
   return {
     meshes: [
       { builder: slab, material: mat(0xb5b0a6), name: 'floor' },
       { builder: rail, material: mat(0x77736b), name: 'railing' },
     ],
-    facePolys: p.analyzeRailing ? [{ poly: railPoly, suffix: 'railing' }] : [],
+    facePolys,
   };
 }
 
@@ -476,7 +486,7 @@ export function createDefaultScene() {
     newObject('building', 'Neighbor east', { w: 12, d: 9, eave: 6, roofType: 'gable', pitch: 35, ridgeAxis: 'x', x: 18, z: 2, rot: 15, analyze: false }),
     newObject('building', 'Neighbor south-west', { w: 10, d: 8, eave: 5.5, roofType: 'hip', pitch: 30, x: -15, z: 13, rot: 0, analyze: false }),
     newObject('chimney', 'Chimney', { w: 0.5, d: 0.5, h: 1.4, x: 3, z: -1.2 }),
-    newObject('balcony', 'South balcony', { w: 4, d: 1.6, floorHeight: 3.1, x: 1.5, z: 5.3, rot: 0, analyzeRailing: true }),
+    newObject('balcony', 'South balcony', { w: 4, d: 1.6, floorHeight: 3.1, x: 1.5, z: 5.3, rot: 0, analyzeFront: true, analyzeLeft: true }),
     newObject('terrace', 'Terrace', { w: 5, d: 4, x: 3, z: 7.5, analyze: false }),
     newObject('pergola', 'Pergola', { w: 4, d: 3, h: 2.5, pitch: 8, x: -3.5, z: 7, analyze: true }),
     newObject('tree', 'Old maple', { variety: 'broadleaf', height: 12, trunkHeight: 3, canopyDiameter: 9, x: 8, z: 10 }),

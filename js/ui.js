@@ -313,12 +313,13 @@ export function refreshResults(results, selectedFaceId, dayLabel) {
     `<div class="note">unshaded ${fmtI(f.unshadedPOA)} kWh/m²·yr · shading −${f.shadingLossPct.toFixed(1)}% · ` +
     `${(f.sunHoursYr / 365).toFixed(1)} h direct sun/day (yr avg)${f.sunHoursDay != null ? ` · ${f.sunHoursDay.toFixed(1)} h on ${dayLabel}` : ''}</div>` +
     `<div class="param-row"><label>Panel type</label><select id="pv-type">${typeOptions}</select></div>` +
-    `<div class="param-row"><label>Panels (max ${f.maxPanels} fit)</label><input id="pv-count" type="number" min="0" max="${f.maxPanels}" step="1" value="${f.panelCount}"></div>` +
+    `<div class="param-row"><label>Panels (${f.maxPanels} fit flush)</label><input id="pv-count" type="number" min="0" step="0.5" value="${f.panelCount}"></div>` +
+    (f.exceedsFit ? '<div class="note" style="color:#fab219">⚠ more than fits flush on this face — assumes an overhanging mount</div>' : '') +
     `<div class="note">${f.panelCount} × ${pt.watts} W = <b>${f.kwp.toFixed(2)} kWp</b> covering ${f.usableArea.toFixed(1)} of ${f.area.toFixed(1)} m² → <b>${fmtI(f.yieldKWh)} kWh/yr</b> (${fmtI(f.specificYield)} kWh/kWp)</div>` +
     `<div class="note" style="border-top:1px solid var(--grid);margin-top:6px;padding-top:6px">All ${results.length} analyzed surfaces together: ${sumPanels} panels ≈ ${sumKwp.toFixed(1)} kWp → ${fmtI(sumYield)} kWh/yr</div>`;
   total.querySelector('#pv-type').addEventListener('change', (e) => app.setPanelConfig(f.id, { type: e.target.value }));
   total.querySelector('#pv-count').addEventListener('change', (e) => {
-    const v = parseInt(e.target.value, 10);
+    const v = parseFloat(e.target.value);
     app.setPanelConfig(f.id, { count: isNaN(v) ? undefined : v });
   });
 

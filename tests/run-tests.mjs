@@ -80,9 +80,20 @@ const faces = [...built.values()].flatMap((b) => b.faces);
   check('garage flat face up', garage.faces.length === 1 && garage.faces[0].tilt < 0.5, garage.faces[0]?.tilt.toFixed(2));
   check('garage flat face area = 21', Math.abs(garage.faces[0].area - 21) < 0.1, garage.faces[0]?.area.toFixed(1));
 
-  const balcony = [...built.values()].find((b) => b.faces.some((f) => f.kind === 'railing'));
-  const rail = balcony.faces.find((f) => f.kind === 'railing');
+  const balcony = [...built.values()].find((b) => b.faces.some((f) => f.kind === 'railing front'));
+  const rail = balcony.faces.find((f) => f.kind === 'railing front');
   check('railing tilt 90, az 180', Math.abs(rail.tilt - 90) < 0.5 && Math.abs(rail.az - 180) < 0.5, `${rail.tilt.toFixed(1)}/${rail.az.toFixed(1)}`);
+
+  // balcony with all three railing sides: front S, left (looking out) = E, right = W
+  const bal3 = buildObject({ id: 'baltest', type: 'balcony', name: 'bal', params: { w: 4, d: 1.6, floorHeight: 3, railingHeight: 1, analyzeFront: true, analyzeLeft: true, analyzeRight: true, x: 0, z: 0, rot: 0 } });
+  check('balcony exposes 3 railing faces', bal3.faces.length === 3, String(bal3.faces.length));
+  const azOf = (kind) => bal3.faces.find((f) => f.kind === kind)?.az;
+  check('railing sides face S/E/W', Math.abs(azOf('railing front') - 180) < 0.5 && Math.abs(azOf('railing left') - 90) < 0.5 && Math.abs(azOf('railing right') - 270) < 0.5,
+    `front ${azOf('railing front')}, left ${azOf('railing left')}, right ${azOf('railing right')}`);
+  check('all railing faces vertical', bal3.faces.every((f) => Math.abs(f.tilt - 90) < 0.5));
+  // legacy scenes: analyzeRailing maps to the front face
+  const balOld = buildObject({ id: 'balold', type: 'balcony', name: 'old', params: { w: 4, d: 1.6, floorHeight: 3, railingHeight: 1, analyzeRailing: true, x: 0, z: 0, rot: 0 } });
+  check('legacy analyzeRailing still yields front face', balOld.faces.length === 1 && balOld.faces[0].kind === 'railing front');
 
   const panel = [...built.values()].find((b) => b.faces.some((f) => f.kind === 'panel'));
   const pf = panel.faces.find((f) => f.kind === 'panel');
@@ -140,7 +151,15 @@ const faces = [...built.values()].flatMap((b) => b.faces);
   applyPvSizing(results, { [south.id]: { type: 'anker440', count: 10 } }, settings);
   check('custom config 10 × 440 W → 4.4 kWp', south.panelType === 'anker440' && south.panelCount === 10 && Math.abs(south.kwp - 4.4) < 0.001, `${south.kwp}`);
   check('custom yield = kWp × POA × PR', Math.abs(south.yieldKWh - 4.4 * south.annualPOA * 0.8) < 1, south.yieldKWh.toFixed(0));
-  check('count clamped to what fits', (applyPvSizing(results, { [south.id]: { count: 999 } }, settings), south.panelCount === south.maxPanels), `${south.panelCount}/${south.maxPanels}`);
+  // half a panel on a railing: 0.5 × 500 W = 0.25 kWp
+  const railFace = results.find((f) => f.kind === 'railing front');
+  applyPvSizing(results, { [railFace.id]: { count: 0.5 } }, settings);
+  check('half panel on front railing → 0.25 kWp', railFace.panelCount === 0.5 && Math.abs(railFace.kwp - 0.25) < 0.001, `${railFace.panelCount} × → ${railFace.kwp}`);
+  // a whole panel on the small left railing exceeds the flush fit → allowed but flagged
+  const leftRail = results.find((f) => f.kind === 'railing left');
+  applyPvSizing(results, { [leftRail.id]: { count: 1 } }, settings);
+  check('1 panel on left railing allowed with overhang flag', leftRail.panelCount === 1 && leftRail.exceedsFit === true && Math.abs(leftRail.kwp - 0.5) < 0.001, `${leftRail.panelCount}, exceeds=${leftRail.exceedsFit}`);
+  check('auto sizing never exceeds fit', (applyPvSizing(results, {}, settings), results.every((f) => !f.exceedsFit)));
   applyPvSizing(results, {}, settings); // back to auto for the checks below
 
   // day pass
