@@ -93,6 +93,22 @@ export function initUI(appFacade) {
 
   window.addEventListener('keydown', (e) => {
     if (isTyping()) return;
+    const arrows = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+    if (arrows[e.key] && app.getSelectedIds().length && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      if (e.shiftKey) {
+        // shift+←/→ rotate the selection (alt = fine steps)
+        const step = e.altKey ? 1 : 5;
+        if (e.key === 'ArrowLeft') app.rotateSelected(-step);
+        else if (e.key === 'ArrowRight') app.rotateSelected(step);
+      } else {
+        // arrows move in world axes: up=N, down=S, left=W, right=E (alt = fine steps)
+        const step = e.altKey ? 0.1 : 0.5;
+        const [dx, dz] = arrows[e.key];
+        app.nudgeSelected(dx * step, dz * step);
+      }
+      return;
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       app.deleteSelected();
       e.preventDefault();

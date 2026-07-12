@@ -363,6 +363,22 @@ function pushHistory(snap = snapshot()) {
   ui.refreshHistory(true, false);
 }
 
+// consecutive keyboard nudges within this window form one undo step
+let lastKeyEditT = 0;
+function beginKeyGesture() {
+  const now = performance.now();
+  if (now - lastKeyEditT > 800) pushHistory();
+  lastKeyEditT = now;
+}
+
+function afterKeyEdit() {
+  rebuildChimneys();
+  updateMeasurement();
+  ui.refreshParams();
+  invalidateResults();
+  saveLocal();
+}
+
 function restoreSnapshot(snap) {
   state.objects = JSON.parse(snap);
   ensureIdCounterAbove(state.objects);
@@ -451,6 +467,39 @@ const app = {
   getMeasurement: () => measurement,
   canUndo: () => undoStack.length > 0,
   canRedo: () => redoStack.length > 0,
+
+  // keyboard nudges: move the selection in world axes / rotate it about its centroid.
+  // Rapid presses (key repeat) coalesce into a single undo step.
+  nudgeSelected(dx, dz) {
+    if (!selectedIds.size) return;
+    beginKeyGesture();
+    for (const id of selectedIds) {
+      const desc = state.objects.find((o) => o.id === id);
+      if (!desc) continue;
+      desc.params.x = r1((desc.params.x || 0) + dx);
+      desc.params.z = r1((desc.params.z || 0) + dz);
+      rebuildObject(desc);
+    }
+    afterKeyEdit();
+  },
+
+  rotateSelected(deg) {
+    if (!selectedIds.size) return;
+    beginKeyGesture();
+    const descs = [...selectedIds].map((id) => state.objects.find((o) => o.id === id)).filter(Boolean);
+    const cx = descs.reduce((s, d) => s + (d.params.x || 0), 0) / descs.length;
+    const cz = descs.reduce((s, d) => s + (d.params.z || 0), 0) / descs.length;
+    const a = -deg * RAD;
+    const cos = Math.cos(a), sin = Math.sin(a);
+    for (const desc of descs) {
+      const dx = (desc.params.x || 0) - cx, dz = (desc.params.z || 0) - cz;
+      desc.params.rot = normalizeDeg((desc.params.rot || 0) + deg);
+      desc.params.x = r1(cx + dx * cos + dz * sin);
+      desc.params.z = r1(cz - dx * sin + dz * cos);
+      rebuildObject(desc);
+    }
+    afterKeyEdit();
+  },
 
   selectObject(id) {
     selectedIds = id ? new Set([id]) : new Set();
