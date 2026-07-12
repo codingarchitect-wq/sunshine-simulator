@@ -116,6 +116,8 @@ const objectsRoot = new THREE.Group();
 scene.add(objectsRoot);
 const heatmapRoot = new THREE.Group();
 scene.add(heatmapRoot);
+const measureRoot = new THREE.Group();
+scene.add(measureRoot);
 
 // sun path line + marker
 let sunPathLine = null;
@@ -229,6 +231,116 @@ function applyHighlight(group, on) {
 
 function applySelectionHighlights() {
   for (const [id, o] of objMap) applyHighlight(o.group, selectedIds.has(id));
+  updateMeasurement();
+}
+
+// ---------- distance measurement (auto-shown when exactly two objects are selected) ----------
+let measurement = null; // { center, nearest } in meters
+let lastMeasureT = 0;
+
+function collectWorldGeom(group) {
+  const tris = [], verts = [];
+  group.updateMatrixWorld(true);
+  group.traverse((n) => {
+    if (!n.isMesh) return;
+    const pos = n.geometry.getAttribute('position');
+    if (!pos) return;
+    const idx = n.geometry.index;
+    const v = (i) => new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(n.matrixWorld);
+    if (idx) {
+      for (let i = 0; i < idx.count; i += 3)
+        tris.push(new THREE.Triangle(v(idx.getX(i)), v(idx.getX(i + 1)), v(idx.getX(i + 2))));
+    } else {
+      for (let i = 0; i < pos.count; i += 3) tris.push(new THREE.Triangle(v(i), v(i + 1), v(i + 2)));
+    }
+    for (let i = 0; i < pos.count; i++) verts.push(v(i));
+  });
+  return { tris, verts };
+}
+
+// Nearest gap between two groups: min over vertex↔triangle distances both ways.
+// (Exact for face/vertex closest pairs; close enough for edge/edge on our low-poly shapes.)
+function nearestBetween(groupA, groupB) {
+  const A = collectWorldGeom(groupA), B = collectWorldGeom(groupB);
+  const best = { dist: Infinity, pA: new THREE.Vector3(), pB: new THREE.Vector3() };
+  const tmp = new THREE.Vector3();
+  const scan = (verts, tris, flipped) => {
+    for (const vv of verts)
+      for (const t of tris) {
+        t.closestPointToPoint(vv, tmp);
+        const d = vv.distanceTo(tmp);
+        if (d < best.dist) {
+          best.dist = d;
+          (flipped ? best.pB : best.pA).copy(vv);
+          (flipped ? best.pA : best.pB).copy(tmp);
+        }
+      }
+  };
+  scan(A.verts, B.tris, false);
+  scan(B.verts, A.tris, true);
+  return best;
+}
+
+function measureLabelSprite(text) {
+  const cv = document.createElement('canvas');
+  cv.width = 256; cv.height = 80;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = 'rgba(13,13,13,0.75)';
+  ctx.beginPath();
+  ctx.roundRect(28, 12, 200, 56, 12);
+  ctx.fill();
+  ctx.font = 'bold 36px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd97a';
+  ctx.fillText(text, 128, 42);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(cv), transparent: true, depthTest: false,
+  }));
+  sprite.scale.set(4.6, 1.45, 1);
+  sprite.renderOrder = 1000;
+  return sprite;
+}
+
+function updateMeasurement() {
+  for (const c of [...measureRoot.children]) {
+    measureRoot.remove(c);
+    c.geometry?.dispose?.();
+    c.material?.map?.dispose?.();
+    c.material?.dispose?.();
+  }
+  measurement = null;
+  if (selectedIds.size !== 2) return;
+  const [a, b] = [...selectedIds].map((id) => objMap.get(id));
+  if (!a || !b) return;
+
+  const center = Math.hypot(
+    (a.desc.params.x || 0) - (b.desc.params.x || 0),
+    (a.desc.params.z || 0) - (b.desc.params.z || 0)
+  );
+  const near = nearestBetween(a.group, b.group);
+  measurement = { center, nearest: near.dist };
+
+  const geo = new THREE.BufferGeometry().setFromPoints([near.pA, near.pB]);
+  const line = new THREE.Line(geo, new THREE.LineDashedMaterial({
+    color: 0xffd97a, dashSize: 0.35, gapSize: 0.18, depthTest: false, transparent: true,
+  }));
+  line.computeLineDistances();
+  line.renderOrder = 999;
+  measureRoot.add(line);
+  for (const p of [near.pA, near.pB]) {
+    const dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.14, 8, 6),
+      new THREE.MeshBasicMaterial({ color: 0xffd97a, depthTest: false, transparent: true })
+    );
+    dot.position.copy(p);
+    dot.renderOrder = 999;
+    measureRoot.add(dot);
+  }
+  const label = measureLabelSprite(`${near.dist.toFixed(2)} m`);
+  label.position.copy(near.pA).add(near.pB).multiplyScalar(0.5);
+  label.position.y += 0.7;
+  measureRoot.add(label);
 }
 
 // keep drag-rotate values in a friendly (-180, 180] range
@@ -336,6 +448,7 @@ const app = {
   getObjects: () => state.objects,
   getSelectedIds: () => [...selectedIds],
   getSelectedId: () => (selectedIds.size === 1 ? [...selectedIds][0] : null),
+  getMeasurement: () => measurement,
   canUndo: () => undoStack.length > 0,
   canRedo: () => redoStack.length > 0,
 
@@ -368,9 +481,13 @@ const app = {
     ui.refreshHistory(this.canUndo(), this.canRedo());
   },
 
-  addObject(type) {
+  addObject(type, preset) {
     pushHistory();
-    const desc = newObject(type, undefined, { x: Math.round(Math.random() * 10 - 5), z: Math.round(Math.random() * 10 + 12) });
+    const desc = newObject(type, preset?.name, {
+      x: Math.round(Math.random() * 10 - 5),
+      z: Math.round(Math.random() * 10 + 12),
+      ...(preset?.overrides || {}),
+    });
     state.objects.push(desc);
     rebuildObject(desc);
     this.selectObject(desc.id);
@@ -393,6 +510,7 @@ const app = {
       state.objects.splice(idx, 1);
     }
     selectedIds = new Set();
+    applySelectionHighlights();
     rebuildChimneys();
     ui.refreshObjectList();
     ui.refreshParams();
@@ -715,6 +833,11 @@ function onPointerMove(e) {
     }
     dragState.moved = true;
   }
+  // keep the measurement line following the drag (throttled — it walks the meshes)
+  if (measurement && performance.now() - lastMeasureT > 120) {
+    lastMeasureT = performance.now();
+    updateMeasurement();
+  }
 }
 
 function onPointerUp() {
@@ -726,6 +849,7 @@ function onPointerUp() {
     pushHistory(snap); // the pre-drag state, so undo reverts the whole gesture
     for (const it of items) rebuildObject(it.desc); // refresh analysis faces
     if (items.some((it) => it.desc.type !== 'chimney')) rebuildChimneys();
+    updateMeasurement();
     ui.refreshParams();
     invalidateResults();
     saveLocal();

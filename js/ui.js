@@ -1,6 +1,6 @@
 // DOM layer. main.js hands us an `app` facade; we render panels and forward events.
 
-import { OBJECT_TYPES, compass8 } from './objects.js';
+import { OBJECT_TYPES, ADD_PRESETS, compass8 } from './objects.js';
 import { renderMonthlyChart } from './charts.js';
 import { rampCSS } from './heatmap.js';
 
@@ -34,12 +34,19 @@ export function initUI(appFacade) {
     e.target.value = '';
   });
 
-  // add-object buttons
+  // add-object buttons (types + presets)
   const grid = $('add-buttons');
   for (const [type, def] of Object.entries(OBJECT_TYPES)) {
     const b = document.createElement('button');
     b.textContent = `${def.icon} ${def.label}`;
     b.addEventListener('click', () => app.addObject(type));
+    grid.appendChild(b);
+  }
+  for (const preset of ADD_PRESETS) {
+    const b = document.createElement('button');
+    b.textContent = `${preset.icon} ${preset.label}`;
+    b.title = `${OBJECT_TYPES[preset.type].label} preset`;
+    b.addEventListener('click', () => app.addObject(preset.type, preset));
     grid.appendChild(b);
   }
   $('btn-delete').addEventListener('click', () => app.deleteSelected());
@@ -138,7 +145,14 @@ export function refreshParams() {
   const selIds = app.getSelectedIds();
   if (selIds.length > 1) {
     $('params-title').textContent = `Properties — ${selIds.length} objects`;
-    box.innerHTML = '<p class="note">Multiple objects selected. Drag any of them to move the whole group; shift-drag to rotate the group around its center. Select a single object to edit its properties.</p>';
+    let html = '';
+    const m = selIds.length === 2 ? app.getMeasurement() : null;
+    if (m) {
+      html += `<div class="measure"><span>Nearest gap</span><b>${m.nearest.toFixed(2)} m</b></div>` +
+        `<div class="measure"><span>Center to center</span><b>${m.center.toFixed(2)} m</b></div>`;
+    }
+    html += `<p class="note">${selIds.length === 2 ? 'The dashed line in the 3D view marks the nearest gap. ' : ''}Drag any selected object to move the whole group; shift-drag rotates the group around its center. Select a single object to edit its properties.</p>`;
+    box.innerHTML = html;
     return;
   }
   const desc = app.getObjects().find((o) => o.id === app.getSelectedId());

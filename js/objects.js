@@ -116,6 +116,14 @@ export const OBJECT_TYPES = {
   },
 };
 
+// One-click presets shown next to the type buttons (thin wrappers over a type)
+export const ADD_PRESETS = [
+  {
+    icon: '🚗', label: 'Garage', type: 'building', name: 'Garage',
+    overrides: { w: 6, d: 3.5, eave: 2.6, roofType: 'flat', overhang: 0.1, analyze: true },
+  },
+];
+
 export function defaultParams(type) {
   const p = {};
   for (const def of OBJECT_TYPES[type].params) p[def.key] = def.def;

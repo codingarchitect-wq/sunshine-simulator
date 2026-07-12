@@ -30,7 +30,11 @@ directly from disk won't work.)
   group), **shift-drag to rotate** — a multi-selection rotates together around its center,
   and negative angles (counterclockwise) are fine everywhere. Every dimension is editable
   in the Properties panel, and everything is undoable (**⌘Z / Ctrl+Z**, redo with
-  ⇧⌘Z / Ctrl+Y). The scene autosaves to your browser and can be saved/loaded as JSON.
+  ⇧⌘Z / Ctrl+Y). With exactly **two objects selected**, the app measures the distance
+  between them — nearest gap (marked by a dashed line in the 3D view) and
+  center-to-center — live while you drag. A 🚗 Garage preset button creates a
+  ready-made flat-roof garage. The scene autosaves to your browser and can be
+  saved/loaded as JSON.
 - **Explore the sun** (bottom bar). Pick any date (solstice/equinox shortcuts), scrub
   through the day, or press ▶ to animate. Shadows are the real ones for your
   latitude/longitude (NOAA solar position algorithm, ±0.1°). The orange arc is the
