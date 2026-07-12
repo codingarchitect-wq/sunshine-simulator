@@ -46,6 +46,10 @@
         <button id="btn-delete" class="danger" disabled>Delete</button>
         <button id="btn-reset" title="Restore the demo scene">Reset demo</button>
       </div>
+      <div class="row gap">
+        <button id="btn-undo" disabled title="Undo (⌘Z / Ctrl+Z)">↶ Undo</button>
+        <button id="btn-redo" disabled title="Redo (⇧⌘Z / Ctrl+Y)">↷ Redo</button>
+      </div>
     </section>
     <section class="panel">
       <h2 id="params-title">Properties</h2>
@@ -61,7 +65,7 @@
     <canvas id="c"></canvas>
     <div id="viewport-hud">
       <div id="sun-readout"></div>
-      <div id="hint">drag = orbit · scroll = zoom · click object = select · drag object = move · shift-drag = rotate</div>
+      <div id="hint">drag = orbit · scroll = zoom · click = select · ⌘/ctrl-click = multi-select · drag object = move · shift-drag = rotate · ⌘Z = undo</div>
     </div>
     <div id="progress" hidden><div id="progress-bar"></div><span id="progress-label"></span></div>
   </main>

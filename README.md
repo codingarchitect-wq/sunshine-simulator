@@ -26,8 +26,11 @@ directly from disk won't work.)
   adjustable pitch, ridge axis, eave height, overhang), trees (broadleaf/conifer with
   seasonal light transmittance), hedges, terraces, roofed terraces, balconies, chimneys
   (they auto-sit on whatever roof is below them) and free PV panels. Click an object to
-  select it, drag to move, **shift-drag to rotate**; every dimension is editable in the
-  Properties panel. The scene autosaves to your browser and can be saved/loaded as JSON.
+  select it, **⌘/Ctrl-click to multi-select**, drag to move (a multi-selection moves as a
+  group), **shift-drag to rotate** — a multi-selection rotates together around its center,
+  and negative angles (counterclockwise) are fine everywhere. Every dimension is editable
+  in the Properties panel, and everything is undoable (**⌘Z / Ctrl+Z**, redo with
+  ⇧⌘Z / Ctrl+Y). The scene autosaves to your browser and can be saved/loaded as JSON.
 - **Explore the sun** (bottom bar). Pick any date (solstice/equinox shortcuts), scrub
   through the day, or press ▶ to animate. Shadows are the real ones for your
   latitude/longitude (NOAA solar position algorithm, ±0.1°). The orange arc is the

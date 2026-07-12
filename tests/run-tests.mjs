@@ -98,6 +98,9 @@ const faces = [...built.values()].flatMap((b) => b.faces);
   // shed with rotation: rot 90 means low side faces west (z+ rotated 90° cw = W... z+ is S; S rotated 90° cw = W)
   const shed = buildObject({ id: 'shedtest', type: 'building', name: 'shed', params: { w: 6, d: 4, eave: 3, roofType: 'shed', pitch: 10, ridgeAxis: 'x', lowSide: 'z+', overhang: 0.2, analyze: true, x: 0, z: 0, rot: 90 } });
   check('rotated shed faces west', Math.abs(shed.faces[0].az - 270) < 0.5, shed.faces[0].az.toFixed(1));
+  // negative rotation = counterclockwise: shed low side S rotated −90 faces east
+  const negShed = buildObject({ id: 'negshed', type: 'building', name: 'negshed', params: { w: 6, d: 4, eave: 3, roofType: 'shed', pitch: 10, ridgeAxis: 'x', lowSide: 'z+', overhang: 0.2, analyze: true, x: 0, z: 0, rot: -90 } });
+  check('rot −90 (ccw): shed faces east', Math.abs(negShed.faces[0].az - 90) < 0.5, negShed.faces[0].az.toFixed(1));
 
   check('total analyzed faces in demo', faces.length >= 6, String(faces.length));
   console.log('   faces:', faces.map((f) => `${f.label} (${f.area.toFixed(0)}m²)`).join(' | '));

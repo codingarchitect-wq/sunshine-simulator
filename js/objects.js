@@ -18,7 +18,7 @@ const bool = (key, label, def, showIf) => ({ kind: 'boolean', key, label, def, s
 const POS = [
   num('x', 'Position east–west (m)', -150, 150, 0.1, 0),
   num('z', 'Position north–south (m)', -150, 150, 0.1, 0),
-  num('rot', 'Rotation (° clockwise)', 0, 359, 1, 0),
+  num('rot', 'Rotation (° cw, negative = ccw)', -360, 360, 1, 0),
 ];
 
 const pitched = (p) => p.roofType === 'gable' || p.roofType === 'hip';

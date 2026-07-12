@@ -12,6 +12,7 @@ import { collectExportMeshes, exportOBJ, exportDAE, download } from './exporters
 import * as ui from './ui.js';
 
 const STORAGE_KEY = 'sunshine-sim-scene-v2';
+const RAD = Math.PI / 180;
 
 // ---------- state ----------
 const state = {
@@ -21,7 +22,7 @@ const state = {
 };
 let climate = null;
 let results = null;
-let selectedId = null;
+let selectedIds = new Set();
 let selectedFaceId = null;
 let heatmapMode = 'annual';
 let playing = false;
@@ -203,7 +204,7 @@ function rebuildObject(desc) {
   const { group, faces } = buildObject(desc, ctx);
   objMap.set(desc.id, { desc, group, faces });
   objectsRoot.add(group);
-  if (desc.id === selectedId) applyHighlight(group, true);
+  if (selectedIds.has(desc.id)) applyHighlight(group, true);
 }
 
 function rebuildChimneys() {
@@ -224,6 +225,43 @@ function applyHighlight(group, on) {
   group.traverse((n) => {
     if (n.isMesh && n.material.emissive) n.material.emissive.setHex(on ? 0x274a7a : 0x000000);
   });
+}
+
+function applySelectionHighlights() {
+  for (const [id, o] of objMap) applyHighlight(o.group, selectedIds.has(id));
+}
+
+// keep drag-rotate values in a friendly (-180, 180] range
+function normalizeDeg(d) {
+  const n = ((d + 180) % 360 + 360) % 360 - 180;
+  return n === -180 ? 180 : n;
+}
+
+// ---------- undo / redo (scene-object snapshots) ----------
+const undoStack = [];
+const redoStack = [];
+const HISTORY_MAX = 60;
+
+const snapshot = () => JSON.stringify(state.objects);
+
+function pushHistory(snap = snapshot()) {
+  undoStack.push(snap);
+  if (undoStack.length > HISTORY_MAX) undoStack.shift();
+  redoStack.length = 0;
+  ui.refreshHistory(true, false);
+}
+
+function restoreSnapshot(snap) {
+  state.objects = JSON.parse(snap);
+  ensureIdCounterAbove(state.objects);
+  const alive = new Set(state.objects.map((o) => o.id));
+  selectedIds = new Set([...selectedIds].filter((id) => alive.has(id)));
+  rebuildAll();
+  applySelectionHighlights();
+  ui.refreshObjectList();
+  ui.refreshParams();
+  invalidateResults();
+  saveLocal();
 }
 
 function invalidateResults(msg = 'Scene changed — press <b>Run analysis</b> to refresh the numbers.') {
@@ -296,17 +334,42 @@ function updateWeatherStatus() {
 const app = {
   state,
   getObjects: () => state.objects,
-  getSelectedId: () => selectedId,
+  getSelectedIds: () => [...selectedIds],
+  getSelectedId: () => (selectedIds.size === 1 ? [...selectedIds][0] : null),
+  canUndo: () => undoStack.length > 0,
+  canRedo: () => redoStack.length > 0,
 
   selectObject(id) {
-    if (selectedId && objMap.get(selectedId)) applyHighlight(objMap.get(selectedId).group, false);
-    selectedId = id;
-    if (id && objMap.get(id)) applyHighlight(objMap.get(id).group, true);
+    selectedIds = id ? new Set([id]) : new Set();
+    applySelectionHighlights();
     ui.refreshObjectList();
     ui.refreshParams();
   },
 
+  toggleSelect(id) {
+    if (selectedIds.has(id)) selectedIds.delete(id);
+    else selectedIds.add(id);
+    applySelectionHighlights();
+    ui.refreshObjectList();
+    ui.refreshParams();
+  },
+
+  undo() {
+    if (!undoStack.length) return;
+    redoStack.push(snapshot());
+    restoreSnapshot(undoStack.pop());
+    ui.refreshHistory(this.canUndo(), this.canRedo());
+  },
+
+  redo() {
+    if (!redoStack.length) return;
+    undoStack.push(snapshot());
+    restoreSnapshot(redoStack.pop());
+    ui.refreshHistory(this.canUndo(), this.canRedo());
+  },
+
   addObject(type) {
+    pushHistory();
     const desc = newObject(type, undefined, { x: Math.round(Math.random() * 10 - 5), z: Math.round(Math.random() * 10 + 12) });
     state.objects.push(desc);
     rebuildObject(desc);
@@ -316,17 +379,20 @@ const app = {
   },
 
   deleteSelected() {
-    if (!selectedId) return;
-    const idx = state.objects.findIndex((o) => o.id === selectedId);
-    if (idx < 0) return;
-    const o = objMap.get(selectedId);
-    if (o) {
-      objectsRoot.remove(o.group);
-      disposeGroup(o.group);
-      objMap.delete(selectedId);
+    if (!selectedIds.size) return;
+    pushHistory();
+    for (const id of selectedIds) {
+      const idx = state.objects.findIndex((o) => o.id === id);
+      if (idx < 0) continue;
+      const o = objMap.get(id);
+      if (o) {
+        objectsRoot.remove(o.group);
+        disposeGroup(o.group);
+        objMap.delete(id);
+      }
+      state.objects.splice(idx, 1);
     }
-    state.objects.splice(idx, 1);
-    selectedId = null;
+    selectedIds = new Set();
     rebuildChimneys();
     ui.refreshObjectList();
     ui.refreshParams();
@@ -335,20 +401,29 @@ const app = {
   },
 
   duplicateSelected() {
-    if (!selectedId) return;
-    const src = state.objects.find((o) => o.id === selectedId);
-    if (!src) return;
-    const desc = newObject(src.type, src.name + ' copy', { ...src.params, x: src.params.x + 3, z: src.params.z + 3 });
-    state.objects.push(desc);
-    rebuildObject(desc);
-    this.selectObject(desc.id);
+    if (!selectedIds.size) return;
+    pushHistory();
+    const copies = [];
+    for (const id of selectedIds) {
+      const src = state.objects.find((o) => o.id === id);
+      if (!src) continue;
+      const desc = newObject(src.type, src.name + ' copy', { ...src.params, x: src.params.x + 3, z: src.params.z + 3 });
+      state.objects.push(desc);
+      rebuildObject(desc);
+      copies.push(desc.id);
+    }
+    selectedIds = new Set(copies);
+    applySelectionHighlights();
+    ui.refreshObjectList();
+    ui.refreshParams();
     invalidateResults();
     saveLocal();
   },
 
   resetScene() {
+    pushHistory();
     state.objects = createDefaultScene();
-    selectedId = null;
+    selectedIds = new Set();
     rebuildAll();
     ui.refreshObjectList();
     ui.refreshParams();
@@ -359,6 +434,7 @@ const app = {
   setObjectName(id, name) {
     const desc = state.objects.find((o) => o.id === id);
     if (!desc) return;
+    pushHistory();
     desc.name = name;
     rebuildObject(desc);
     ui.refreshObjectList();
@@ -369,6 +445,7 @@ const app = {
   setObjectParam(id, key, value) {
     const desc = state.objects.find((o) => o.id === id);
     if (!desc) return;
+    pushHistory();
     desc.params[key] = value;
     rebuildObject(desc);
     if (desc.type !== 'chimney') rebuildChimneys();
@@ -502,11 +579,12 @@ const app = {
       try {
         const data = JSON.parse(reader.result);
         if (!Array.isArray(data.objects)) throw new Error('not a scene file');
+        pushHistory();
         Object.assign(state.location, data.location || {});
         Object.assign(state.settings, data.settings || {});
         state.objects = data.objects;
         ensureIdCounterAbove(state.objects);
-        selectedId = null;
+        selectedIds = new Set();
         rebuildAll();
         initClimate();
         document.getElementById('lat').value = state.location.lat;
@@ -573,52 +651,81 @@ function onPointerDown(e) {
   if (e.button !== 0) return;
   const hit = pickObject(e);
   if (!hit) {
-    if (app.getSelectedId()) app.selectObject(null);
+    if (selectedIds.size) app.selectObject(null);
     return;
   }
-  app.selectObject(hit.objId);
-  const desc = state.objects.find((o) => o.id === hit.objId);
-  const entry = objMap.get(hit.objId);
+  if (e.metaKey || e.ctrlKey) {
+    app.toggleSelect(hit.objId); // multi-select; no drag on modifier clicks
+    return;
+  }
+  if (!selectedIds.has(hit.objId)) app.selectObject(hit.objId);
   controls.enabled = false;
+  const items = [...selectedIds].map((id) => {
+    const desc = state.objects.find((o) => o.id === id);
+    return {
+      desc, group: objMap.get(id).group,
+      startX: desc.params.x || 0, startZ: desc.params.z || 0, startRot: desc.params.rot || 0,
+    };
+  });
   dragState = {
-    desc, group: entry.group, moved: false,
+    items, moved: false,
     rotate: e.shiftKey,
-    startRot: desc.params.rot || 0,
-    startX: e.clientX,
-    offset: new THREE.Vector3(hit.point.x - desc.params.x, 0, hit.point.z - desc.params.z),
+    centroid: {
+      x: items.reduce((s, i) => s + i.startX, 0) / items.length,
+      z: items.reduce((s, i) => s + i.startZ, 0) / items.length,
+    },
+    startClientX: e.clientX,
+    grab: new THREE.Vector3(hit.point.x, 0, hit.point.z),
     // drag on a horizontal plane at the grab height, else elevated grab points jump
     plane: new THREE.Plane(new THREE.Vector3(0, 1, 0), -hit.point.y),
+    snapshot: snapshot(),
   };
 }
 
+const r1 = (v) => Math.round(v * 10) / 10;
+
 function onPointerMove(e) {
   if (!dragState) return;
+  const { items, centroid } = dragState;
   if (dragState.rotate) {
-    if (typeof dragState.desc.params.rot !== 'number') return;
-    const rot = ((dragState.startRot + (e.clientX - dragState.startX) * 0.5) % 360 + 360) % 360;
-    dragState.desc.params.rot = Math.round(rot);
-    dragState.group.rotation.y = -rot * (Math.PI / 180);
+    // rotate the whole selection about its centroid (drag left = counterclockwise)
+    const delta = (e.clientX - dragState.startClientX) * 0.5;
+    const a = -delta * RAD; // matches the compass-clockwise rot convention
+    const cos = Math.cos(a), sin = Math.sin(a);
+    for (const it of items) {
+      const rot = normalizeDeg(Math.round(it.startRot + delta));
+      const dx = it.startX - centroid.x, dz = it.startZ - centroid.z;
+      it.desc.params.rot = rot;
+      it.desc.params.x = r1(centroid.x + dx * cos + dz * sin);
+      it.desc.params.z = r1(centroid.z - dx * sin + dz * cos);
+      it.group.rotation.y = -rot * RAD;
+      it.group.position.set(it.desc.params.x, 0, it.desc.params.z);
+    }
     dragState.moved = true;
   } else {
     setPointer(e);
     pickRay.setFromCamera(pointer, camera);
     const p = new THREE.Vector3();
     if (!pickRay.ray.intersectPlane(dragState.plane, p)) return;
-    dragState.desc.params.x = Math.round((p.x - dragState.offset.x) * 10) / 10;
-    dragState.desc.params.z = Math.round((p.z - dragState.offset.z) * 10) / 10;
-    dragState.group.position.set(dragState.desc.params.x, 0, dragState.desc.params.z);
+    const dx = p.x - dragState.grab.x, dz = p.z - dragState.grab.z;
+    for (const it of items) {
+      it.desc.params.x = r1(it.startX + dx);
+      it.desc.params.z = r1(it.startZ + dz);
+      it.group.position.set(it.desc.params.x, 0, it.desc.params.z);
+    }
     dragState.moved = true;
   }
 }
 
 function onPointerUp() {
   if (!dragState) return;
-  const { desc, moved } = dragState;
+  const { items, moved, snapshot: snap } = dragState;
   dragState = null;
   controls.enabled = true;
   if (moved) {
-    rebuildObject(desc); // refresh analysis faces at the final transform
-    if (desc.type !== 'chimney') rebuildChimneys();
+    pushHistory(snap); // the pre-drag state, so undo reverts the whole gesture
+    for (const it of items) rebuildObject(it.desc); // refresh analysis faces
+    if (items.some((it) => it.desc.type !== 'chimney')) rebuildChimneys();
     ui.refreshParams();
     invalidateResults();
     saveLocal();

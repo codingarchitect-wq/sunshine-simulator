@@ -44,6 +44,8 @@ export function initUI(appFacade) {
   }
   $('btn-delete').addEventListener('click', () => app.deleteSelected());
   $('btn-duplicate').addEventListener('click', () => app.duplicateSelected());
+  $('btn-undo').addEventListener('click', () => app.undo());
+  $('btn-redo').addEventListener('click', () => app.redo());
   $('btn-reset').addEventListener('click', () => {
     if (confirm('Replace the current scene with the demo scene?')) app.resetScene();
   });
@@ -83,11 +85,24 @@ export function initUI(appFacade) {
   $('heatmap-mode').addEventListener('change', () => app.setHeatmapMode($('heatmap-mode').value));
 
   window.addEventListener('keydown', (e) => {
-    if ((e.key === 'Delete' || e.key === 'Backspace') && !isTyping()) {
+    if (isTyping()) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
       app.deleteSelected();
+      e.preventDefault();
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      if (e.shiftKey) app.redo();
+      else app.undo();
+      e.preventDefault();
+    } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'y') {
+      app.redo();
       e.preventDefault();
     }
   });
+}
+
+export function refreshHistory(canUndo, canRedo) {
+  $('btn-undo').disabled = !canUndo;
+  $('btn-redo').disabled = !canRedo;
 }
 
 const isTyping = () => ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName);
@@ -98,29 +113,38 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, isNaN(v) ? a : v));
 export function refreshObjectList() {
   const list = $('object-list');
   list.innerHTML = '';
-  const selId = app.getSelectedId();
+  const selIds = app.getSelectedIds();
   for (const desc of app.getObjects()) {
     const li = document.createElement('li');
-    li.className = desc.id === selId ? 'selected' : '';
+    li.className = selIds.includes(desc.id) ? 'selected' : '';
     const name = document.createElement('span');
     name.textContent = `${OBJECT_TYPES[desc.type].icon} ${desc.name}`;
     const tag = document.createElement('span');
     tag.className = 'tag';
     tag.textContent = OBJECT_TYPES[desc.type].label;
     li.append(name, tag);
-    li.addEventListener('click', () => app.selectObject(desc.id));
+    li.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey) app.toggleSelect(desc.id);
+      else app.selectObject(desc.id);
+    });
     list.appendChild(li);
   }
-  $('btn-delete').disabled = $('btn-duplicate').disabled = !selId;
+  $('btn-delete').disabled = $('btn-duplicate').disabled = selIds.length === 0;
 }
 
 export function refreshParams() {
   const box = $('params');
   box.innerHTML = '';
+  const selIds = app.getSelectedIds();
+  if (selIds.length > 1) {
+    $('params-title').textContent = `Properties — ${selIds.length} objects`;
+    box.innerHTML = '<p class="note">Multiple objects selected. Drag any of them to move the whole group; shift-drag to rotate the group around its center. Select a single object to edit its properties.</p>';
+    return;
+  }
   const desc = app.getObjects().find((o) => o.id === app.getSelectedId());
   $('params-title').textContent = desc ? `Properties — ${desc.name}` : 'Properties';
   if (!desc) {
-    box.innerHTML = '<p class="note">Select an object (click it in the 3D view or in the list).</p>';
+    box.innerHTML = '<p class="note">Select an object (click it in the 3D view or in the list). ⌘/Ctrl-click adds to the selection.</p>';
     return;
   }
   // name
