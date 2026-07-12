@@ -1,0 +1,10 @@
+{
+  "name": "sunshine-simulator",
+  "private": true,
+  "type": "module",
+  "description": "Interactive 3D sun-exposure simulator and PV planner (three.js, no build step)",
+  "scripts": {
+    "start": "python3 -m http.server 8123 --bind 127.0.0.1",
+    "test": "node tests/run-tests.mjs"
+  }
+}

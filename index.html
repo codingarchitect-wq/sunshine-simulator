@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunshine Simulator — Solar Exposure &amp; PV Planner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☀️</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="app">
+
+  <header id="topbar">
+    <div class="brand">☀️ Sunshine Simulator <span class="sub">Stuttgart PV planner</span></div>
+    <div class="loc">
+      <label>Lat <input type="number" id="lat" step="0.0001" min="-90" max="90"></label>
+      <label>Lon <input type="number" id="lon" step="0.0001" min="-180" max="180"></label>
+    </div>
+    <div class="weather">
+      <span id="weather-status" title="Irradiance data source used for the energy numbers">built-in climatology</span>
+      <button id="btn-fetch-weather" title="Download 2020–2024 hourly irradiance from Open-Meteo (ERA5) for your exact location and use it for all energy numbers">Fetch real weather</button>
+    </div>
+    <div class="actions">
+      <button id="btn-run" class="primary" title="Ray-traced shading + irradiance analysis for every analyzed surface">Run analysis</button>
+      <button id="btn-export-obj" title="Wavefront OBJ + MTL (SketchUp Pro, Blender, …)">Export OBJ</button>
+      <button id="btn-export-dae" title="COLLADA .dae — imports into every SketchUp version">Export DAE</button>
+      <button id="btn-save" title="Download scene as JSON">Save</button>
+      <button id="btn-load" title="Load scene JSON">Load</button>
+      <input type="file" id="file-load" accept=".json" hidden>
+    </div>
+  </header>
+
+  <aside id="left">
+    <section class="panel">
+      <h2>Add object</h2>
+      <div id="add-buttons" class="btn-grid"></div>
+    </section>
+    <section class="panel">
+      <h2>Scene objects</h2>
+      <ul id="object-list"></ul>
+      <div class="row gap">
+        <button id="btn-duplicate" disabled>Duplicate</button>
+        <button id="btn-delete" class="danger" disabled>Delete</button>
+        <button id="btn-reset" title="Restore the demo scene">Reset demo</button>
+      </div>
+    </section>
+    <section class="panel">
+      <h2 id="params-title">Properties</h2>
+      <div id="params"></div>
+    </section>
+    <section class="panel">
+      <h2>PV assumptions</h2>
+      <div id="settings"></div>
+    </section>
+  </aside>
+
+  <main id="viewport">
+    <canvas id="c"></canvas>
+    <div id="viewport-hud">
+      <div id="sun-readout"></div>
+      <div id="hint">drag = orbit · scroll = zoom · click object = select · drag object = move · shift-drag = rotate</div>
+    </div>
+    <div id="progress" hidden><div id="progress-bar"></div><span id="progress-label"></span></div>
+  </main>
+
+  <aside id="right">
+    <section class="panel">
+      <h2>Results</h2>
+      <div id="results-note" class="note">No analysis yet — press <b>Run analysis</b>.</div>
+      <div id="heatmap-controls" hidden>
+        <label>Heatmap
+          <select id="heatmap-mode">
+            <option value="annual">Annual insolation (kWh/m²·yr)</option>
+            <option value="day">Direct sun hours on selected day</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+        <div id="heatmap-legend"></div>
+      </div>
+      <div id="results-table"></div>
+      <div id="results-total"></div>
+    </section>
+    <section class="panel" id="chart-panel" hidden>
+      <h2 id="chart-title">Monthly insolation</h2>
+      <div id="chart"></div>
+    </section>
+    <section class="panel">
+      <h2>Cross-check</h2>
+      <p class="note">For a second opinion with NREL's engine, run
+        <a href="https://pvwatts.nrel.gov/pvwatts.php" target="_blank" rel="noopener">PVWatts</a>
+        with your coordinates, or the EU
+        <a href="https://re.jrc.ec.europa.eu/pvg_tools/en/" target="_blank" rel="noopener">PVGIS</a> tool
+        (uses satellite data for Stuttgart).</p>
+    </section>
+  </aside>
+
+  <footer id="timebar">
+    <div class="row">
+      <input type="date" id="date">
+      <button class="chip" data-day="03-20">Mar equinox</button>
+      <button class="chip" data-day="06-21">Jun solstice</button>
+      <button class="chip" data-day="09-22">Sep equinox</button>
+      <button class="chip" data-day="12-21">Dec solstice</button>
+    </div>
+    <div class="row grow">
+      <button id="btn-play" title="Animate the day">▶</button>
+      <input type="range" id="time" min="0" max="1439" step="5">
+      <span id="clock"></span>
+    </div>
+    <div id="suntimes" class="row"></div>
+  </footer>
+
+</div>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
